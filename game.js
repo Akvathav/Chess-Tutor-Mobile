@@ -543,6 +543,12 @@ function _initBoard() {
   });
   // Initial resize to fit mobile screen
   setTimeout(() => { if (STATE.board) STATE.board.resize(); }, 100);
+
+  // Bind tap-to-move for mobile
+  $('#chess-board').on('click', '.square-55d63', function() {
+    const square = $(this).attr('data-square');
+    if (square) _handleSquareClick(square);
+  });
 }
 
 
@@ -550,7 +556,12 @@ function _initBoard() {
    BOARD EVENT HANDLERS
    ============================================================ */
 
+let _tappedSquare = null;
+
 function _onDragStart(source, piece) {
+  _tappedSquare = null;
+  _removeGreySquares();
+
   if (!STATE.gameActive)      return false;
   if (STATE.blunderPending)   return false;
   if (STATE.isEngineThinking) return false;
@@ -563,6 +574,58 @@ function _onDragStart(source, piece) {
   if (turn === 'b' && STATE.playerColor === 'white') return false;
 
   return true;
+}
+
+function _handleSquareClick(square) {
+  if (!STATE.gameActive || STATE.blunderPending || STATE.isEngineThinking) return;
+
+  const turn = STATE.game.turn();
+  if ((turn === 'w') !== (STATE.playerColor === 'white')) return;
+
+  const piece = STATE.game.get(square);
+
+  // Select a piece
+  if (!_tappedSquare) {
+    if (piece && piece.color === turn) {
+      _tappedSquare = square;
+      _onMouseoverSquare(square); // Show hints
+    }
+  } else {
+    // Attempt move or change selection
+    if (_tappedSquare === square) {
+      // Deselect
+      _tappedSquare = null;
+      _removeGreySquares();
+    } else {
+      const fenBefore = STATE.game.fen();
+      const move = STATE.game.move({
+        from: _tappedSquare,
+        to: square,
+        promotion: 'q'
+      });
+
+      if (move === null) {
+        // Invalid move, maybe tapped another friendly piece?
+        if (piece && piece.color === turn) {
+          _removeGreySquares();
+          _tappedSquare = square;
+          _onMouseoverSquare(square);
+        } else {
+          _tappedSquare = null;
+          _removeGreySquares();
+        }
+      } else {
+        // Valid tap-to-move
+        _tappedSquare = null;
+        _removeGreySquares();
+        STATE.board.position(STATE.game.fen());
+        _clearCheckAlarm();
+        const fenAfter = STATE.game.fen();
+        const moveUci  = move.from + move.to + (move.promotion || '');
+        _processPlayerMove(fenBefore, fenAfter, move.san, moveUci);
+      }
+    }
+  }
 }
 
 function _setEngineThinking(isThinking) {

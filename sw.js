@@ -3,7 +3,7 @@
  * Aggressively caches all app assets for full Airplane mode operation.
  */
 
-const CACHE_NAME = 'chess-coach-mobile-v1';
+const CACHE_NAME = 'chess-coach-mobile-v2';
 
 // All files to pre-cache on install
 const PRECACHE_ASSETS = [
