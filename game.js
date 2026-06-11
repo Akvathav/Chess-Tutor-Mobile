@@ -172,7 +172,7 @@ async function _engineGetMove(fen, engineElo) {
   return new Promise((resolve, reject) => {
     _pendingMoveResolve = resolve;
     _pendingMoveReject  = reject;
-    ENGINE_WORKER.postMessage({ type: 'getMove', fen, engineElo, depth: 16 });
+    ENGINE_WORKER.postMessage({ type: 'getMove', fen, engineElo, depth: 10 });
     // Timeout after 15s
     setTimeout(() => {
       if (_pendingMoveReject) {
@@ -189,7 +189,7 @@ async function _engineGetMultiPV(fen, multiPV = 3) {
   return new Promise((resolve, reject) => {
     _pendingMultiPVResolve = resolve;
     _pendingMultiPVReject  = reject;
-    ENGINE_WORKER.postMessage({ type: 'getMultiPV', fen, multiPV, depth: 16 });
+    ENGINE_WORKER.postMessage({ type: 'getMultiPV', fen, multiPV, depth: 10 });
     setTimeout(() => {
       if (_pendingMultiPVReject) {
         _pendingMultiPVReject(new Error('MultiPV timeout'));
