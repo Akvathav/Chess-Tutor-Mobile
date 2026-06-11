@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#c1121f" />
+
+  <title>Chess Coach Mobile — Offline Training App</title>
+  <meta name="description" content="Fully offline chess training app powered by Stockfish WASM. Play, learn, and improve your chess anywhere — no internet required." />
+
+  <link rel="manifest" href="manifest.json" />
+  <link rel="stylesheet" href="lib/chessboard-1.0.0.min.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- ── App Header ─────────────────────────────────────────── -->
+<header class="app-header" role="banner">
+  <div class="app-header__logo">
+    <span class="app-header__icon" aria-hidden="true">♟</span>
+    <span class="app-header__title">Chess Coach</span>
+  </div>
+  <div class="app-header__actions">
+    <div class="engine-status-bar" id="engine-status-bar" title="Engine status">
+      <div class="engine-status-dot" id="engine-status-dot"></div>
+      <span id="engine-status-label">Loading…</span>
+    </div>
+    <button class="header-btn" id="btn-settings" aria-label="Settings">⚙️</button>
+  </div>
+</header>
+
+<!-- ── Pre-Game Overlay ───────────────────────────────────── -->
+<div id="pre-game-overlay" class="game-over-overlay" role="dialog" aria-modal="true" aria-labelledby="pre-game-title">
+
+  <!-- Step 1: Mode Selection -->
+  <div id="pre-game-step-1" class="game-over-card" style="max-width: 440px;">
+    <div class="game-over-card__icon" aria-hidden="true">♟</div>
+    <h2 id="pre-game-title" class="game-over-card__title">Choose Game Mode</h2>
+    <p class="game-over-card__result" style="font-size: 0.9rem; margin-bottom: 1.25rem;">Select how you would like to play today.</p>
+
+    <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 0.75rem;">
+      <button id="btn-mode-learn" class="mode-card-btn">
+        <span class="mode-card-btn__icon">🎓</span>
+        <div class="mode-card-btn__content">
+          <strong>Learn by Play</strong>
+          <span>Coach active — suggestions, live commentary &amp; analysis.</span>
+        </div>
+      </button>
+
+      <button id="btn-mode-standard" class="mode-card-btn">
+        <span class="mode-card-btn__icon">🎮</span>
+        <div class="mode-card-btn__content">
+          <strong>Play Against Computer</strong>
+          <span>Pure gameplay. No coach, no suggestions. Just you and the engine.</span>
+        </div>
+      </button>
+
+      <button id="btn-mode-diagnostic" class="mode-card-btn">
+        <span class="mode-card-btn__icon">📈</span>
+        <div class="mode-card-btn__content">
+          <strong>Know Your ELO</strong>
+          <span>Unassisted gameplay with full performance rating at the end.</span>
+        </div>
+      </button>
+    </div>
+  </div>
+
+  <!-- Step 2: Config -->
+  <div id="pre-game-step-config" class="game-over-card" style="max-width: 420px; display: none;">
+    <div class="game-over-card__icon" aria-hidden="true">⚙️</div>
+    <h2 class="game-over-card__title">Game Settings</h2>
+    <p class="game-over-card__result" style="font-size: 0.85rem; margin-bottom: 1.25rem;">Select opponent strength and your color.</p>
+
+    <div style="margin-bottom: 1.25rem; text-align: left;">
+      <label for="elo-slider" style="display: block; margin-bottom: 0.4rem; font-weight: bold; color: #cbd5e1; font-size: 0.85rem;">
+        Opponent ELO: <span id="elo-display">1200</span>
+      </label>
+      <input type="range" id="elo-slider" min="600" max="2800" step="50" value="1200" style="width: 100%; margin-bottom: 0.5rem; accent-color: #c1121f;" />
+      <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: #94a3b8;">
+        <span>600 (Beginner)</span>
+        <span>2800 (Master)</span>
+      </div>
+    </div>
+
+    <div style="margin-bottom: 1.5rem; text-align: left;">
+      <label style="display: block; margin-bottom: 0.4rem; font-weight: bold; color: #cbd5e1; font-size: 0.85rem;">Your Color:</label>
+      <select id="color-select" class="form-input">
+        <option value="white">White</option>
+        <option value="black">Black</option>
+        <option value="random">Random</option>
+      </select>
+    </div>
+
+    <div class="game-over-card__actions" style="flex-direction: row; gap: 0.5rem;">
+      <button id="btn-back-to-modes" class="btn btn--secondary" style="flex: 1;">Back</button>
+      <button id="btn-start-game-final" class="btn btn--primary" style="flex: 2;">Start Game</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ── Post-Game Report Modal ──────────────────────────────── -->
+<div id="post-game-report-overlay" class="game-over-overlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="post-game-title">
+  <div class="game-over-card" style="max-width: 480px; gap: 1.25rem;">
+    <div class="game-over-card__icon" aria-hidden="true">🏆</div>
+    <h2 id="post-game-title" class="game-over-card__title">Post-Game Analysis</h2>
+
+    <div style="display: grid; grid-template-columns: auto 1fr; gap: 1.25rem; width: 100%; align-items: center; background: rgba(0,0,0,0.25); border-radius: 8px; padding: 1.1rem; border: 1px solid #334155;">
+      <div style="text-align: center;">
+        <div style="font-size: 2.5rem; font-weight: 700; color: #4ade80; line-height: 1;" id="report-accuracy">--%</div>
+        <div style="font-size: 0.75rem; color: #94a3b8; text-transform: uppercase; margin-top: 0.3rem;">Accuracy</div>
+      </div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; text-align: left; font-size: 0.85rem;">
+        <div><span style="color: #4ade80;">Best:</span> <strong id="report-best">0</strong></div>
+        <div><span style="color: #60a5fa;">Inaccuracies:</span> <strong id="report-inacc">0</strong></div>
+        <div><span style="color: #facc15;">Mistakes:</span> <strong id="report-mistakes">0</strong></div>
+        <div><span style="color: #f87171;">Blunders:</span> <strong id="report-blunders">0</strong></div>
+        <div style="grid-column: 1 / -1;"><span style="color: #a78bfa;">🤝 Hints:</span> <strong id="report-hints">0</strong> <span style="font-size: 0.75rem; color: #64748b;">(−2.5% each)</span></div>
+      </div>
+    </div>
+
+    <div class="game-over-card__actions" style="flex-direction: row; gap: 0.75rem; width: 100%;">
+      <button id="btn-play-again" class="btn btn--primary" style="flex: 1;">Play Again</button>
+      <button class="btn btn--secondary" style="flex: 1;" onclick="document.getElementById('post-game-report-overlay').style.display='none'; _startReviewMode();">Review Board</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ── Consent Modal ──────────────────────────────────────── -->
+<div id="consent-overlay" class="game-over-overlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="consent-title">
+  <div class="game-over-card" style="max-width: 420px; gap: 0.75rem;">
+    <div id="consent-icon" class="game-over-card__icon" aria-hidden="true">♟</div>
+    <h2 id="consent-title" class="game-over-card__title" style="font-size: 1.35rem;">Confirm Move</h2>
+    <p id="consent-message" class="game-over-card__result" style="font-size: 0.875rem; line-height: 1.6; color: #cbd5e1; margin-bottom: 0;"></p>
+
+    <div id="consent-eval-bar" style="display:flex; align-items:center; gap: 0.75rem; background: rgba(0,0,0,0.25); border-radius: 8px; padding: 0.6rem 0.75rem; border: 1px solid #334155;">
+      <div style="flex:1; text-align:center;">
+        <div style="font-size: 0.7rem; color: #64748b; text-transform: uppercase; margin-bottom: 0.2rem;">Best Move</div>
+        <div id="consent-score1" style="font-size: 1.1rem; font-weight: 700; color: #4ade80;">—</div>
+      </div>
+      <div style="font-size: 1rem; color: #475569;">vs</div>
+      <div style="flex:1; text-align:center;">
+        <div style="font-size: 0.7rem; color: #64748b; text-transform: uppercase; margin-bottom: 0.2rem;">Your Choice</div>
+        <div id="consent-score2" style="font-size: 1.1rem; font-weight: 700; color: #fbbf24;">—</div>
+      </div>
+      <div style="flex:1; text-align:center;">
+        <div style="font-size: 0.7rem; color: #64748b; text-transform: uppercase; margin-bottom: 0.2rem;">Delta</div>
+        <div id="consent-delta" style="font-size: 1.1rem; font-weight: 700; color: #f87171;">—</div>
+      </div>
+    </div>
+
+    <div class="game-over-card__actions" style="flex-direction: row; gap: 0.6rem;">
+      <button id="btn-consent-confirm" class="btn btn--primary" style="flex:1;">▶ Confirm</button>
+      <button id="btn-consent-cancel" class="btn btn--secondary" style="flex:1;">↩ Rethink</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ── Main Layout ─────────────────────────────────────────── -->
+<main class="game-layout" aria-label="Chess game">
+
+  <!-- Board Column -->
+  <section class="game-layout__board-col" aria-label="Chess board">
+
+    <!-- Opponent bar -->
+    <div class="player-bar player-bar--opponent">
+      <span class="player-bar__avatar player-bar__avatar--engine" aria-hidden="true">🤖</span>
+      <span class="player-bar__name">Stockfish <span class="elo-badge" id="engine-elo-badge">(1200 ELO)</span><span id="stockfish-loader" class="inline-spinner" style="display:none; margin-left:8px;"></span></span>
+      <div class="player-bar__material" id="material-player" aria-label="Material captured by you"></div>
+    </div>
+
+    <!-- Board + Eval Bar -->
+    <div class="board-with-eval">
+      <div id="center-action-text"></div>
+      <div id="eval-bar-container" class="eval-bar-container">
+        <div id="eval-bar-fill" class="eval-bar-fill"></div>
+        <span id="eval-bar-text" class="eval-bar-text">0.0</span>
+      </div>
+      <div id="chess-board" class="chess-board-wrap" role="img" aria-label="Interactive chess board"></div>
+    </div>
+
+    <!-- Player bar -->
+    <div class="player-bar player-bar--player">
+      <span class="player-bar__avatar" id="player-avatar" aria-hidden="true">P</span>
+      <span class="player-bar__name" id="player-name-display">Player</span>
+      <div class="player-bar__material" id="material-engine" aria-label="Material captured by engine"></div>
+    </div>
+
+    <!-- Controls -->
+    <div class="board-controls">
+      <span id="game-status-text" class="status-text status-text--your-turn" role="status" aria-live="polite">
+        Your turn — make your first move
+      </span>
+      <div class="board-controls__buttons" id="standard-controls">
+        <button class="btn btn--ghost btn--small" id="btn-takeback" aria-label="Take back the last move">Takeback</button>
+        <button class="btn btn--resign btn--small" id="btn-resign" aria-label="Resign the current game">🏳️ Resign</button>
+        <button class="btn btn--ghost btn--small btn--toggle-active" id="btn-move-directions" title="Toggle move highlights">
+          ↗ <span id="move-dir-state">ON</span>
+        </button>
+      </div>
+      <div class="board-controls__buttons" id="review-controls" style="display:none;">
+        <button class="btn btn--secondary btn--small" id="btn-review-start">|&lt;&lt;</button>
+        <button class="btn btn--secondary btn--small" id="btn-review-prev">&lt;</button>
+        <button class="btn btn--secondary btn--small" id="btn-review-next">&gt;</button>
+        <button class="btn btn--secondary btn--small" id="btn-review-end">&gt;&gt;|</button>
+      </div>
+    </div>
+
+    <!-- Settings button -->
+    <div class="floating-settings-wrap">
+      <button id="btn-settings-board" class="floating-settings-btn" aria-label="Board settings">
+        <span>⚙️</span>
+        <span class="floating-settings-btn__label">Settings</span>
+      </button>
+    </div>
+
+  </section>
+
+  <!-- Coach Panel -->
+  <aside class="game-layout__panel-col coach-panel" aria-label="Coach's Panel">
+
+    <header class="coach-panel__header">
+      <h2 class="coach-panel__title"><span aria-hidden="true">♜</span> Movement Guide</h2>
+      <span class="coach-panel__subtitle">Silent Guardian Mode</span>
+    </header>
+
+    <!-- Dependency overlay -->
+    <div id="dependency-overlay" class="dependency-overlay" style="display:none;" role="alert">
+      <div class="dependency-overlay__content">
+        <span class="dependency-overlay__icon" aria-hidden="true">⛔</span>
+        <h3 class="dependency-overlay__title">Engine Offline</h3>
+        <p class="dependency-overlay__desc">The Stockfish WASM engine failed to load.</p>
+        <div id="dependency-message" class="dependency-overlay__message"></div>
+      </div>
+    </div>
+
+    <!-- Engine notice -->
+    <div id="engine-notice" class="engine-notice" style="display:none;" role="alert">
+      <span class="engine-notice__icon" aria-hidden="true">⚙</span>
+      <div>
+        <strong>Stockfish not loaded</strong>
+        <p>Moves will be played without engine analysis.</p>
+      </div>
+    </div>
+
+    <!-- Live Commentary -->
+    <div id="live-commentary" class="live-commentary" style="display:none;">
+      <h3 class="coach-panel__section-title" style="margin-bottom: 0.4rem; color: #7dd3fc;">Move Analysis History</h3>
+      <div class="live-commentary__content" id="live-commentary-text"></div>
+    </div>
+
+    <!-- Continue Section -->
+    <div id="continue-section" class="continue-section" style="display:none;">
+      <button class="btn btn--primary" id="btn-continue" style="width: 100%;" aria-label="Continue to opponent's move">
+        Continue to Opponent's Move →
+      </button>
+    </div>
+
+    <!-- Review Panel -->
+    <div id="review-panel" class="coach-suggestions" style="display:none; margin-bottom: 0.75rem;">
+      <h3 class="coach-panel__section-title" style="margin-bottom: 0.4rem; color: #a855f7;">
+        <span aria-hidden="true">🔍</span> Move Analysis
+      </h3>
+      <div class="board-controls__buttons" id="review-controls-panel" style="display: flex; justify-content: center; gap: 0.4rem; width: 100%; margin-bottom: 0.75rem;">
+        <button class="btn btn--secondary btn--small" id="btn-review-start2">|&lt;&lt;</button>
+        <button class="btn btn--secondary btn--small" id="btn-review-prev2">&lt;</button>
+        <button class="btn btn--secondary btn--small" id="btn-review-next2">&gt;</button>
+        <button class="btn btn--secondary btn--small" id="btn-review-end2">&gt;&gt;|</button>
+      </div>
+      <div id="review-badge" style="display: inline-block; padding: 0.2rem 0.45rem; border-radius: 4px; font-weight: bold; margin-bottom: 0.4rem; font-size: 0.8rem;"></div>
+      <div id="review-eval" style="font-weight: bold; margin-bottom: 0.4rem; color: #cbd5e1; font-size: 0.8rem;"></div>
+      <div id="review-desc" style="color: #e2e8f0; font-size: 0.875rem; line-height: 1.5; background: rgba(0,0,0,0.2); padding: 0.6rem; border-radius: 4px; border: 1px solid #334155;"></div>
+
+      <div class="game-over-card__actions" style="margin-top: 0.75rem;">
+        <button onclick="window.location.reload()" class="btn btn--primary" style="width: 100%; margin-bottom: 0.4rem;">Play Again</button>
+      </div>
+    </div>
+
+    <!-- Coach Suggestions -->
+    <div id="coach-suggestions" class="coach-suggestions" style="display:none;">
+      <h3 class="coach-panel__section-title" style="margin-bottom: 0.4rem; color: #fbbf24;">
+        <span aria-hidden="true">♟</span> Coach Suggestions
+      </h3>
+      <p style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 0.5rem;">Click a suggestion to play it, or make your own move.</p>
+      <div id="suggestion-cards" class="suggestion-cards" role="list" aria-label="Move suggestions"></div>
+    </div>
+
+    <!-- Move History -->
+    <div class="coach-panel__section">
+      <h3 class="coach-panel__section-title">Move History</h3>
+      <div id="move-list" class="move-list" role="log" aria-label="Move history" aria-live="polite">
+        <table class="move-table" aria-label="Moves played">
+          <thead class="move-table__head">
+            <tr>
+              <th class="move-num-col">#</th>
+              <th class="move-white-col">White</th>
+              <th class="move-black-col">Black</th>
+            </tr>
+          </thead>
+          <tbody id="move-table-body"></tbody>
+        </table>
+        <p id="move-list-empty" class="move-list__empty">No moves yet. Make your first move!</p>
+      </div>
+    </div>
+
+    <!-- Ask Coach Button -->
+    <div id="ask-coach-section" style="display:none; padding: 0;">
+      <button id="btn-ask-coach" class="btn btn--primary" style="width: 100%; background: linear-gradient(135deg, #7c3aed, #4f46e5); border: none;" aria-label="Ask coach for move suggestions">
+        ❓ Ask Coach
+      </button>
+      <p id="ask-coach-hint" style="text-align:center; font-size: 0.7rem; color: #64748b; margin-top: 0.3rem; margin-bottom: 0;">Each hint reduces final accuracy by 2.5%</p>
+    </div>
+
+  </aside>
+</main>
+
+
+<!-- ── Promotion Overlay ───────────────────────────────────── -->
+<div id="promotion-overlay" class="game-over-overlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="promotion-title">
+  <div class="game-over-card promotion-card" style="max-width:480px; position:relative; overflow:hidden; gap:0.5rem;">
+    <div class="promotion-card__shimmer" aria-hidden="true"></div>
+    <div id="promotion-icon" class="game-over-card__icon" style="font-size:4rem;" aria-hidden="true">♟️</div>
+    <div id="promotion-elo-badge" class="promotion-elo-badge">ELO 600</div>
+    <h2 id="promotion-title" class="game-over-card__title" style="font-size:1.75rem;">Novice Strategist</h2>
+    <p id="promotion-subtitle" class="game-over-card__result" style="font-size:0.875rem; line-height:1.6; margin-bottom:0.5rem;">You've proven your skill and earned your rank!</p>
+    <div id="promotion-star-badge" class="promotion-star-badge" style="display:none; justify-content:center;">⭐ <strong>Independent Strategist</strong> — Promoted with minimal hints!</div>
+    <div id="promotion-wins" class="promotion-wins-bar"><span>🏆</span> <span id="promotion-wins-text">2 / 3 Tests Won</span></div>
+    <div class="game-over-card__actions" style="flex-direction:column; gap:0.6rem; width:100%; margin-top:0.75rem;">
+      <button id="btn-advance-tier" class="btn btn--primary" style="width:100%;">🚀 Advance to Next Tier</button>
+      <button id="btn-practice-tier" class="btn btn--secondary" style="width:100%;">🛡️ Practice Current Tier</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Test-Failed Overlay ─────────────────────────────────── -->
+<div id="test-fail-overlay" class="game-over-overlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="test-fail-title">
+  <div class="game-over-card" style="max-width:420px;">
+    <div class="game-over-card__icon" aria-hidden="true">💔</div>
+    <h2 id="test-fail-title" class="game-over-card__title">Testing Gate Failed</h2>
+    <p class="game-over-card__result" style="font-size:0.875rem; line-height:1.7;">
+      You didn't secure 2 wins in the Testing series — but every master has fallen before they rose.<br><br>
+      You've been returned to <strong>Training Mode</strong>. Complete 3 coaching games to challenge the gate again.
+    </p>
+    <div class="game-over-card__actions">
+      <button class="btn btn--primary" style="width:100%;" onclick="window.location.reload()">🔄 Begin Training Again</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Settings Overlay ────────────────────────────────────── -->
+<div id="settings-overlay" class="settings-overlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+  <div class="settings-panel">
+    <div class="settings-panel__header">
+      <h2 id="settings-title" class="settings-panel__title">⚙️ Board Settings</h2>
+      <button id="btn-close-settings" class="settings-panel__close" aria-label="Close settings">✕</button>
+    </div>
+
+    <div class="settings-section">
+      <h3 class="settings-section__title">🎨 Board Theme</h3>
+      <div class="theme-grid">
+        <button class="theme-swatch" data-theme="classic" title="Classic">
+          <div class="theme-swatch__preview">
+            <div class="theme-swatch__sq" style="background:#f0d9b5;"></div>
+            <div class="theme-swatch__sq" style="background:#b58863;"></div>
+            <div class="theme-swatch__sq" style="background:#b58863;"></div>
+            <div class="theme-swatch__sq" style="background:#f0d9b5;"></div>
+          </div>
+          <span>Classic</span>
+        </button>
+        <button class="theme-swatch" data-theme="ocean" title="Ocean">
+          <div class="theme-swatch__preview">
+            <div class="theme-swatch__sq" style="background:#c9e8f0;"></div>
+            <div class="theme-swatch__sq" style="background:#3d7fa3;"></div>
+            <div class="theme-swatch__sq" style="background:#3d7fa3;"></div>
+            <div class="theme-swatch__sq" style="background:#c9e8f0;"></div>
+          </div>
+          <span>Ocean</span>
+        </button>
+        <button class="theme-swatch" data-theme="forest" title="Forest">
+          <div class="theme-swatch__preview">
+            <div class="theme-swatch__sq" style="background:#eeeed2;"></div>
+            <div class="theme-swatch__sq" style="background:#769656;"></div>
+            <div class="theme-swatch__sq" style="background:#769656;"></div>
+            <div class="theme-swatch__sq" style="background:#eeeed2;"></div>
+          </div>
+          <span>Forest</span>
+        </button>
+        <button class="theme-swatch" data-theme="midnight" title="Midnight">
+          <div class="theme-swatch__preview">
+            <div class="theme-swatch__sq" style="background:#8296a8;"></div>
+            <div class="theme-swatch__sq" style="background:#1a2b38;"></div>
+            <div class="theme-swatch__sq" style="background:#1a2b38;"></div>
+            <div class="theme-swatch__sq" style="background:#8296a8;"></div>
+          </div>
+          <span>Midnight</span>
+        </button>
+        <button class="theme-swatch" data-theme="crimson" title="Crimson">
+          <div class="theme-swatch__preview">
+            <div class="theme-swatch__sq" style="background:#f0d4c4;"></div>
+            <div class="theme-swatch__sq" style="background:#8f2020;"></div>
+            <div class="theme-swatch__sq" style="background:#8f2020;"></div>
+            <div class="theme-swatch__sq" style="background:#f0d4c4;"></div>
+          </div>
+          <span>Crimson</span>
+        </button>
+        <button class="theme-swatch" data-theme="purple" title="Royal Purple">
+          <div class="theme-swatch__preview">
+            <div class="theme-swatch__sq" style="background:#e8d9f0;"></div>
+            <div class="theme-swatch__sq" style="background:#6a3d9a;"></div>
+            <div class="theme-swatch__sq" style="background:#6a3d9a;"></div>
+            <div class="theme-swatch__sq" style="background:#e8d9f0;"></div>
+          </div>
+          <span>Royal Purple</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <h3 class="settings-section__title">♟️ Piece Style</h3>
+      <div class="piece-style-grid">
+        <button class="piece-style-btn" data-style="classic">
+          <div class="piece-style-btn__preview"><span class="piece-preview-icon piece-preview-classic">♜ ♟</span></div>
+          <span>Classic</span>
+          <small>Standard pieces</small>
+        </button>
+        <button class="piece-style-btn" data-style="neon">
+          <div class="piece-style-btn__preview"><span class="piece-preview-icon piece-preview-neon">♜ ♟</span></div>
+          <span>Neon Cyber</span>
+          <small>Electric cyan glow</small>
+        </button>
+        <button class="piece-style-btn" data-style="royal">
+          <div class="piece-style-btn__preview"><span class="piece-preview-icon piece-preview-royal">♜ ♟</span></div>
+          <span>Royal Gold</span>
+          <small>Warm golden tone</small>
+        </button>
+      </div>
+    </div>
+
+    <div class="settings-panel__footer">
+      <button id="btn-close-settings-footer" class="btn btn--primary" style="width:100%;">Apply &amp; Close</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ── Libraries ───────────────────────────────────────────── -->
+<script src="lib/jquery-3.7.1.min.js"></script>
+<script src="lib/chess.min.js"></script>
+<script src="lib/chessboard-1.0.0.min.js"></script>
+
+<!-- ── Game Logic ──────────────────────────────────────────── -->
+<script src="game.js"></script>
+
+</body>
+</html>

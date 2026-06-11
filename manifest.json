@@ -1,0 +1,26 @@
+{
+  "name": "Chess Coach Mobile",
+  "short_name": "Chess Coach",
+  "description": "Offline Chess Tutor powered by Stockfish WASM",
+  "start_url": "/game.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#080f18",
+  "theme_color": "#c1121f",
+  "icons": [
+    {
+      "src": "img/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "img/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["games", "education"],
+  "lang": "en"
+}

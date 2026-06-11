@@ -1,0 +1,19 @@
+# Chess Coach Mobile — Apache config
+# Ensures correct MIME types for WASM and PWA deployment
+
+AddType application/wasm .wasm
+AddType application/manifest+json .webmanifest
+
+# CORS headers needed for SharedArrayBuffer (Stockfish multi-threading)
+Header always set Cross-Origin-Opener-Policy "same-origin"
+Header always set Cross-Origin-Embedder-Policy "require-corp"
+
+# Cache static assets aggressively
+<FilesMatch "\.(wasm|js|css|png|ico|mp3)$">
+    Header set Cache-Control "public, max-age=31536000"
+</FilesMatch>
+
+# Never cache HTML (so SW update is detected)
+<FilesMatch "\.html$">
+    Header set Cache-Control "no-cache"
+</FilesMatch>
